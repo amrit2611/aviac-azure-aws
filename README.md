@@ -1,4 +1,4 @@
-**Following command to install requirements**
+*Following command to install requirements*
 ***
 pip install -r requirements.txt
 ***
