@@ -95,11 +95,11 @@ def create_job(batch_service_client: BatchServiceClient, job_id: str, pool_id: s
 
 def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_path: str, script_path: str, bucket_url: str, key_url: str, output_url: str):
     print(f'Adding a single task to job [{job_id}]...')
-    command = f'/bin/bash -c "cp {dockerfile_path} . && cp {script_path} . && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' bucket_url key_url output_url"'
+    command = f'/bin/bash -c "cp {dockerfile_path} . && cp {script_path} . && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' `bucket_url` `key_url` `output_url`"'
     task = batchmodels.TaskAddParameter(
                id=f'Task-{job_id}',
                command_line=command,
-            #    resource_files="{dockerfile_path}, {}"
+               resource_files=[]
                )
     task.resource_files(file_path=dockerfile_path, blob_source=os.path.dirname(os.path.realpath(__file__)))
     task.resource_files(file_path=script_path, blob_source=os.path.dirname(os.path.realpath(__file__)))
