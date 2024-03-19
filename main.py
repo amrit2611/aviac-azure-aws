@@ -103,9 +103,12 @@ def create_job(batch_service_client: BatchServiceClient, job_id: str, pool_id: s
 
 def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_path: str, script_path: str, bucket_url: str, key_url: str, output_url: str):
     print(f'Adding a single task to job [{job_id}]...')
-    dockerfile_resource = batchmodels.ResourceFile(file_path=dockerfile_path, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
-    script_resource = batchmodels.ResourceFile(file_path=script_path, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
-    command = f'/bin/bash -c "cp {os.path.basename(dockerfile_path)} . && cp {os.path.basename(script_path)} . && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' {bucket_url} {key_url} {output_url}"'
+    
+    dockerfile_name = os.path.basename(dockerfile_path)
+    script_name = os.path.basename(script_path)
+    dockerfile_resource = batchmodels.ResourceFile(file_path=dockerfile_name, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
+    script_resource = batchmodels.ResourceFile(file_path=script_name, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
+    command = f'/bin/bash -c "cp {dockerfile_name} . && cp {script_name} . && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' {bucket_url} {key_url} {output_url}"'
     task = batchmodels.TaskAddParameter(
                id=f'Task-{job_id}',
                command_line=command,
@@ -172,4 +175,4 @@ if __name__ == '__main__':
     finally:
         if query_yes_no('Delete pool?') == 'yes':
             batch_client.pool.delete(POOL_ID)
-print("End")
+print("**********     End     *************")
