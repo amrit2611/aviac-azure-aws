@@ -103,12 +103,14 @@ def create_job(batch_service_client: BatchServiceClient, job_id: str, pool_id: s
 
 def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_path: str, script_path: str, bucket_url: str, key_url: str, output_url: str):
     print(f'Adding a single task to job [{job_id}]...')
-    command = f'/bin/bash -c "cp {dockerfile_path} . && cp {script_path} . && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' `bucket_url` `key_url` `output_url`"'
+    dockerfile_resource = batchmodels.ResourceFile(file_path=dockerfile_path, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
+    script_resource = batchmodels.ResourceFile(file_path=script_path, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
+    command = f'/bin/bash -c "cp {os.path.basename(dockerfile_path)} . && cp {os.path.basename(script_path)} . && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' {bucket_url} {key_url} {output_url}"'
     task = batchmodels.TaskAddParameter(
                id=f'Task-{job_id}',
                command_line=command,
                resource_files=[
-                   dockerfile_path, script_path
+                   dockerfile_resource, script_resource
                ])
     batch_service_client.task.add(job_id, task)
 
@@ -157,7 +159,7 @@ if __name__ == '__main__':
         create_pool(batch_client, POOL_ID)
         create_job(batch_client, JOB_ID, POOL_ID)
         add_tasks(batch_client, JOB_ID, dockerfile_sas_url, script_sas_url, BUCKET, KEY, OUTPUT)
-        wait_For_tasks_to_complete(batch_client, JOB_ID, datetime.timedelta(minutes=30))
+        wait_for_tasks_to_complete(batch_client, JOB_ID, datetime.timedelta(minutes=1))
         print("Success! All tasks reached the 'Completed' state within the ""specified timeout period.")
         end_time = datetime.datetime.now().replace(microsecond=0)
         print()
