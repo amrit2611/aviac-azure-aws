@@ -8,7 +8,15 @@ import config
 from azure.batch import BatchServiceClient
 from azure.batch.batch_auth import SharedKeyCredentials
 import azure.batch.models as batchmodels
+from azure.batch.models import ResourceFile
 from azure.core.exceptions import ResourceExistsError
+from azure.storage.blob import (
+    BlobServiceClient,
+    BlobSasPermissions,
+    generate_blob_sas,
+    generate_container_sas
+    )
+
 DEFAULT_ENCODING = "utf-8"
 
 # ...............creating JOB_ID and POOL_ID.................
@@ -99,11 +107,10 @@ def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_
     task = batchmodels.TaskAddParameter(
                id=f'Task-{job_id}',
                command_line=command,
-               resource_files=[]
-               )
-    task.resource_files(file_path=dockerfile_path, blob_source=os.path.dirname(os.path.realpath(__file__)))
-    task.resource_files(file_path=script_path, blob_source=os.path.dirname(os.path.realpath(__file__)))
-    # output_file_path = f"{output_folder}/output-{input_file_name}"
+               resource_files=[
+                   ResourceFile(file_path=os.path.basename(dockerfile_path), blob_source=dockerfile_path),
+                   ResourceFile(file_path=os.path.basename(script_path), blob_source=script_path)
+               ])
     batch_service_client.task.add_collection(job_id, task)
 
 
@@ -130,17 +137,27 @@ if __name__ == '__main__':
     start_time = datetime.datetime.now().replace(microsecond=0)
     print(f'Sample start: {start_time}')
     print()
+    
+    def generate_blob_sas_uri(container_name, blob_name):
+        blob_service_client = BlobServiceClient(account_url= f"https://{config.STORAGE_ACCOUNT_NAME}.{config.STORAGE_ACCOUNT_DOMAIN}/", credential=config.STORAGE_ACCOUNT_KEY)
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+        sas_token = generate_blob_sas(account_name=config.STORAGE_ACCOUNT_NAME, container_name=container_name, blob_name=blob_name, account_key=config.STORAGE_ACCOUNT_KEY, permission=BlobSasPermissions(read=True), expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=5))
+        return blob_client.url + '?' + sas_token
+    
+    dockerfile_sas_url = generate_blob_sas_uri(config.STORAGE_ACCOUNT_CONTAINER, 'Dockerfile')
+    script_sas_url = generate_blob_sas_uri(config.STORAGE_ACCOUNT_CONTAINER, 'entry.sh')
+    
     credentials = SharedKeyCredentials(config.BATCH_ACCOUNT_NAME,
         config.BATCH_ACCOUNT_KEY)
     batch_client = BatchServiceClient(      
         credentials,
         batch_url=config.BATCH_ACCOUNT_URL)
-    dockerfile_path = "Dockerfile"
-    script_path = "entry.sh"
+    # dockerfile_path = "Dockerfile"
+    # script_path = "entry.sh"
     try:
         create_pool(batch_client, POOL_ID)
         create_job(batch_client, JOB_ID, POOL_ID)
-        add_tasks(batch_client, JOB_ID, dockerfile_path, script_path, BUCKET, KEY, OUTPUT)
+        add_tasks(batch_client, JOB_ID, dockerfile_sas_url, script_sas_url, BUCKET, KEY, OUTPUT)
         wait_For_tasks_to_complete(batch_client, JOB_ID, datetime.timedelta(minutes=30))
         print("Success! All tasks reached the 'Completed' state within the ""specified timeout period.")
         end_time = datetime.datetime.now().replace(microsecond=0)
