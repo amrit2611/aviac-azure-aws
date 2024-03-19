@@ -108,10 +108,9 @@ def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_
                id=f'Task-{job_id}',
                command_line=command,
                resource_files=[
-                   ResourceFile(file_path=os.path.basename(dockerfile_path), blob_source=dockerfile_path),
-                   ResourceFile(file_path=os.path.basename(script_path), blob_source=script_path)
+                   dockerfile_path, script_path
                ])
-    batch_service_client.task.add_collection(job_id, task)
+    batch_service_client.task.add(job_id, task)
 
 
 def wait_for_tasks_to_complete(batch_service_client: BatchServiceClient, job_id: str,
