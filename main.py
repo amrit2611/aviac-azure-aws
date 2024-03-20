@@ -106,9 +106,9 @@ def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_
     
     dockerfile_name = os.path.basename(dockerfile_path)
     script_name = os.path.basename(script_path)
-    dockerfile_resource = batchmodels.ResourceFile(file_path=dockerfile_name, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
-    script_resource = batchmodels.ResourceFile(file_path=script_name, auto_storage_container_name=config.STORAGE_ACCOUNT_CONTAINER)
-    command = f'/bin/bash -c "cp {dockerfile_name} . && cp {script_name} . && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' {bucket_url} {key_url} {output_url}"'
+    dockerfile_resource = batchmodels.ResourceFile(file_path=dockerfile_name, http_url=dockerfile_path)
+    script_resource = batchmodels.ResourceFile(file_path=script_name, http_url=script_path)
+    command = f'/bin/bash -c "if ! command -v docker &> /dev/null; then sudo apt-get update && sudo apt-get install -y docker.io; fi && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' {bucket_url} {key_url} {output_url}"'
     task = batchmodels.TaskAddParameter(
                id=f'Task-{job_id}',
                command_line=command,
@@ -147,7 +147,8 @@ if __name__ == '__main__':
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
         sas_token = generate_blob_sas(account_name=config.STORAGE_ACCOUNT_NAME, container_name=container_name, blob_name=blob_name, account_key=config.STORAGE_ACCOUNT_KEY, permission=BlobSasPermissions(read=True), expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=5))
         return blob_client.url + '?' + sas_token
-    
+    dockerfile_url = "https://aviacbatchstorage.blob.core.windows.net/sourcecontainer/Dockerfile"
+    script_url = "https://aviacbatchstorage.blob.core.windows.net/sourcecontainer/entry.sh"
     dockerfile_sas_url = generate_blob_sas_uri(config.STORAGE_ACCOUNT_CONTAINER, 'Dockerfile')
     script_sas_url = generate_blob_sas_uri(config.STORAGE_ACCOUNT_CONTAINER, 'entry.sh')
     
@@ -161,7 +162,7 @@ if __name__ == '__main__':
     try:
         create_pool(batch_client, POOL_ID)
         create_job(batch_client, JOB_ID, POOL_ID)
-        add_tasks(batch_client, JOB_ID, dockerfile_sas_url, script_sas_url, BUCKET, KEY, OUTPUT)
+        add_tasks(batch_client, JOB_ID, dockerfile_url, script_url, BUCKET, KEY, OUTPUT)
         wait_for_tasks_to_complete(batch_client, JOB_ID, datetime.timedelta(minutes=1))
         print("Success! All tasks reached the 'Completed' state within the ""specified timeout period.")
         end_time = datetime.datetime.now().replace(microsecond=0)
