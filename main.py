@@ -80,9 +80,9 @@ def create_pool(batch_service_client: BatchServiceClient, pool_id: str):
         id=pool_id,
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=batchmodels.ImageReference(
-                publisher="canonical",
-                offer="0001-com-ubuntu-server-focal",
-                sku="20_04-lts",
+                publisher="microsoft-dsvm",
+                offer="ubuntu-hpc",
+                sku="2004",
                 version="latest"
             ),
             node_agent_sku_id="batch.node.ubuntu 20.04"),
@@ -147,6 +147,7 @@ if __name__ == '__main__':
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
         sas_token = generate_blob_sas(account_name=config.STORAGE_ACCOUNT_NAME, container_name=container_name, blob_name=blob_name, account_key=config.STORAGE_ACCOUNT_KEY, permission=BlobSasPermissions(read=True), expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=5))
         return blob_client.url + '?' + sas_token
+    
     dockerfile_url = "https://aviacbatchstorage.blob.core.windows.net/sourcecontainer/Dockerfile"
     script_url = "https://aviacbatchstorage.blob.core.windows.net/sourcecontainer/entry.sh"
     dockerfile_sas_url = generate_blob_sas_uri(config.STORAGE_ACCOUNT_CONTAINER, 'Dockerfile')
@@ -176,4 +177,4 @@ if __name__ == '__main__':
     finally:
         if query_yes_no('Delete pool?') == 'yes':
             batch_client.pool.delete(POOL_ID)
-print("**********     End     *************")
+print("************************     End     ***********************")
