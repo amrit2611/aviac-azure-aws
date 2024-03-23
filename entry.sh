@@ -12,9 +12,14 @@
 
 echo "Launching DroneYard"
 
-BUCKET="$4"
-KEY="$5"
-OUTPUT="$6"
+export BUCKET="sdhfoh" && export KEY="adoihfo " && export OUTPUT="output"
+echo BUCKET
+echo KEY
+echo OUTPUT
+
+BUCKET="test-drone-yard-droneyard-dronephotosbucket1549df6-u35knpllluqx"
+KEY="batch-test-1"
+OUTPUT="output"
 
 echo "processing images from '$KEY' in bucket $BUCKET to $OUTPUT"
 

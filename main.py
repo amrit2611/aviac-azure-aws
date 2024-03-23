@@ -18,6 +18,7 @@ from azure.storage.blob import (
     )
 
 DEFAULT_ENCODING = "utf-8"
+docker_image_name = "amrit2611/aviac-odm-1"
 
 # ...............creating JOB_ID and POOL_ID.................
 timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -26,15 +27,15 @@ POOL_ID = JOB_ID
 
 
 # ...............handling command-line arguments.............
-if len(sys.argv) != 4:
-    print("Usage: python main.py BUCKET KEY OUTPUT")
-    sys.exit(1)
-BUCKET = sys.argv[1]
-KEY = sys.argv[2]
-OUTPUT = sys.argv[3]
-print("Argument 1:", BUCKET)
-print("Argument 2:", KEY)
-print("Argument 3:", OUTPUT)
+# if len(sys.argv) != 4:
+#     print("Usage: python main.py BUCKET KEY OUTPUT")
+#     sys.exit(1)
+# BUCKET = sys.argv[1]
+# KEY = sys.argv[2]
+# OUTPUT = sys.argv[3]
+# print("Argument 1:", BUCKET)
+# print("Argument 2:", KEY)
+# print("Argument 3:", OUTPUT)
 
 
 def query_yes_no(question: str, default: str = "yes") -> str:
@@ -76,6 +77,7 @@ def print_batch_exception(batch_exception: batchmodels.BatchErrorException):
 
 def create_pool(batch_service_client: BatchServiceClient, pool_id: str):
     print(f'Creating pool [{pool_id}]...')
+    container_conf = batchmodels.ContainerConfiguration(type='dockerCompatible', container_image_names=[docker_image_name])
     new_pool = batchmodels.PoolAddParameter(
         id=pool_id,
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
@@ -85,6 +87,7 @@ def create_pool(batch_service_client: BatchServiceClient, pool_id: str):
                 sku="2004",
                 version="latest"
             ),
+            container_configuration=container_conf,
             node_agent_sku_id="batch.node.ubuntu 20.04"),
         vm_size=config.POOL_VM_SIZE,
         target_dedicated_nodes=config.POOL_NODE_COUNT,
@@ -101,20 +104,32 @@ def create_job(batch_service_client: BatchServiceClient, job_id: str, pool_id: s
     batch_service_client.job.add(job)
 
 
-def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_path: str, script_path: str, bucket_url: str, key_url: str, output_url: str):
+def add_tasks(batch_service_client: BatchServiceClient, job_id: str, dockerfile_path: str, script_path: str):
     print(f'Adding a single task to job [{job_id}]...')
     
     dockerfile_name = os.path.basename(dockerfile_path)
     script_name = os.path.basename(script_path)
     dockerfile_resource = batchmodels.ResourceFile(file_path=dockerfile_name, http_url=dockerfile_path)
     script_resource = batchmodels.ResourceFile(file_path=script_name, http_url=script_path)
-    command = f'/bin/bash -c "if ! command -v docker &> /dev/null; then sudo apt-get update && sudo apt-get install -y docker.io; fi && docker build -t my_docker_image . && docker run --rm my_docker_image /bin/bash -c \'{os.path.basename(script_path)}\' {bucket_url} {key_url} {output_url}"'
+    
+    bucket_name = "test-drone-yard-droneyard-dronephotosbucket1549df6-u35knpllluqx"
+    key_name = "batch-test-1"
+    output_name = "output"
+    
+    task_container_settings = batchmodels.TaskContainerSettings(
+        image_name=docker_image_name,
+        container_run_options=' --workdir /')
+    
+    # command = f'/bin/bash cmd /c set BUCKET={bucket_name}  -c \'entry.sh BUCKET KEY OUTPUT\''
+    command = f'/bin/bash -c "./entry.sh "test-drone-yard-droneyard-dronephotosbucket1549df6-u35knpllluqx" "batch-test-1" "output""'
     task = batchmodels.TaskAddParameter(
                id=f'Task-{job_id}',
                command_line=command,
+            # command_line='/bin/sh -c \"echo \'hello world\' > $AZ_BATCH_TASK_WORKING_DIR/output.txt\"',    
                resource_files=[
                    dockerfile_resource, script_resource
-               ])
+               ],
+               container_settings=task_container_settings)
     batch_service_client.task.add(job_id, task)
 
 
@@ -142,29 +157,20 @@ if __name__ == '__main__':
     print(f'Sample start: {start_time}')
     print()
     
-    def generate_blob_sas_uri(container_name, blob_name):
-        blob_service_client = BlobServiceClient(account_url= f"https://{config.STORAGE_ACCOUNT_NAME}.{config.STORAGE_ACCOUNT_DOMAIN}/", credential=config.STORAGE_ACCOUNT_KEY)
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-        sas_token = generate_blob_sas(account_name=config.STORAGE_ACCOUNT_NAME, container_name=container_name, blob_name=blob_name, account_key=config.STORAGE_ACCOUNT_KEY, permission=BlobSasPermissions(read=True), expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=5))
-        return blob_client.url + '?' + sas_token
-    
     dockerfile_url = "https://aviacbatchstorage.blob.core.windows.net/sourcecontainer/Dockerfile"
     script_url = "https://aviacbatchstorage.blob.core.windows.net/sourcecontainer/entry.sh"
-    dockerfile_sas_url = generate_blob_sas_uri(config.STORAGE_ACCOUNT_CONTAINER, 'Dockerfile')
-    script_sas_url = generate_blob_sas_uri(config.STORAGE_ACCOUNT_CONTAINER, 'entry.sh')
     
     credentials = SharedKeyCredentials(config.BATCH_ACCOUNT_NAME,
         config.BATCH_ACCOUNT_KEY)
     batch_client = BatchServiceClient(      
         credentials,
         batch_url=config.BATCH_ACCOUNT_URL)
-    # dockerfile_path = "Dockerfile"
-    # script_path = "entry.sh"
+    
     try:
         create_pool(batch_client, POOL_ID)
         create_job(batch_client, JOB_ID, POOL_ID)
-        add_tasks(batch_client, JOB_ID, dockerfile_url, script_url, BUCKET, KEY, OUTPUT)
-        wait_for_tasks_to_complete(batch_client, JOB_ID, datetime.timedelta(minutes=1))
+        add_tasks(batch_client, JOB_ID, dockerfile_url, script_url)
+        wait_for_tasks_to_complete(batch_client, JOB_ID, datetime.timedelta(minutes=15))
         print("Success! All tasks reached the 'Completed' state within the ""specified timeout period.")
         end_time = datetime.datetime.now().replace(microsecond=0)
         print()
